@@ -23,7 +23,7 @@
     "outDir": "./dist",
     "inlineSources": true,
     "inlineSourceMap": true,
-    "rootDir": ".",
+    "rootDir": "./src",
   },
   "include": [
     "src", "tests"

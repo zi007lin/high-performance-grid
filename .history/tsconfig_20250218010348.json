@@ -20,10 +20,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "types": ["jest", "node"],
-    "outDir": "./dist",
-    "inlineSources": true,
-    "inlineSourceMap": true,
-    "rootDir": ".",
+    "sourceMap": true,
+    "outDir": "./dist"
   },
   "include": [
     "src", "tests"

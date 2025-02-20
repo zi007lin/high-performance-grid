@@ -19,14 +19,9 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["jest", "node"],
-    "outDir": "./dist",
-    "inlineSources": true,
-    "inlineSourceMap": true,
-    "rootDir": ".",
+    "types": ["jest", "node"]
   },
   "include": [
-    "src", "tests"
-  ],
-  "exclude": ["node_modules"]
+    "src", ""
+  ]
 }
