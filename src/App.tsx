@@ -15,19 +15,26 @@ interface AlertItem {
   timestamp: string;
 }
 
-// Create an event emitter for grid updates
 const gridUpdateEmitter = {
   listeners: [] as ((count: number) => void)[],
   emit(count: number) {
+    console.log('[DEBUG] Emitting Update Count:', count);  // Debug log
     this.listeners.forEach(listener => listener(count));
   },
   subscribe(listener: (count: number) => void) {
     this.listeners.push(listener);
+    console.log('[DEBUG] Subscribed to Updates');  // Debug log
     return () => {
       this.listeners = this.listeners.filter(l => l !== listener);
+      console.log('[DEBUG] Unsubscribed from Updates');  // Debug log
     };
   }
 };
+
+// Register globally once
+if (!(window as any).gridUpdateEmitter) {
+  (window as any).gridUpdateEmitter = gridUpdateEmitter;
+}
 
 const App: React.FC = () => {
   const dataModelRef = useRef(createDataModel(10));
@@ -38,20 +45,21 @@ const App: React.FC = () => {
 
   const lastUpdateTimeRef = useRef<number>(performance.now());
   const updateCountRef = useRef<number>(0);
-  const gapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Subscribe to grid updates
     const unsubscribe = gridUpdateEmitter.subscribe((count) => {
       if (!isPaused) {
-        updateCountRef.current = count;
+        updateCountRef.current += count;
+        console.log('[DEBUG] Received Update Count:', updateCountRef.current);  // Debug log
       }
     });
 
-    const monitorInterval = setInterval(() => {
+    const monitor = () => {
       const now = performance.now();
       const elapsed = now - lastUpdateTimeRef.current;
-      const rate = (updateCountRef.current / elapsed) * 1000;
+      const rate = updateCountRef.current / (elapsed / 1000);
+
+      console.log('[DEBUG] Calculated Rate:', rate);  // Debug log
 
       setCurrentRate(rate);
 
@@ -66,39 +74,28 @@ const App: React.FC = () => {
       });
 
       if (rate === 0 || isPaused) {
-        createAlert('No Messages', 'Message gap detected');
+        createAlert('No Updates', 'Update gap detected');
       } else if (rate > 1000) {
-        createAlert('High Rate', `Message rate exceeded: ${rate.toFixed(0)} msg/s`);
+        createAlert('High Rate', `Update rate exceeded: ${rate.toFixed(0)} updates/s`);
+      } else {
+        // Clear previous alerts if the rate is normal
+        setAlerts(prev => prev.filter(alert => alert.type !== 'No Updates'));
       }
 
       updateCountRef.current = 0;
       lastUpdateTimeRef.current = now;
-    }, 1000);
 
-    const createRandomGap = () => {
-      const delay = Math.random() * 10000 + 5000;
-      gapTimeoutRef.current = setTimeout(() => {
-        setIsPaused(true);
-        setTimeout(() => {
-          setIsPaused(false);
-          createRandomGap();
-        }, 3000);
-      }, delay);
+      // Fixed delay for monitoring
+      setTimeout(monitor, 1000);
     };
 
-    createRandomGap();
+    // Start monitoring
+    monitor();
 
     return () => {
-      clearInterval(monitorInterval);
-      if (gapTimeoutRef.current) {
-        clearTimeout(gapTimeoutRef.current);
-      }
       unsubscribe();
     };
   }, [isPaused]);
-
-  // Export the emitter for the grid to use
-  (window as any).gridUpdateEmitter = gridUpdateEmitter;
 
   const createAlert = (type: string, message: string) => {
     const newAlert: AlertItem = {
@@ -107,10 +104,20 @@ const App: React.FC = () => {
       message,
       timestamp: new Date().toLocaleTimeString()
     };
-    setAlerts(prev => [newAlert, ...prev].slice(0, 3));
+
+    setAlerts(prev => {
+      const filteredAlerts = prev.filter(alert => alert.type !== type);
+      return [newAlert, ...filteredAlerts].slice(0, 5);
+    });
   };
 
-  // Rest of the render code remains the same...
+  // Clear alerts when updates resume
+  useEffect(() => {
+    if (currentRate > 0 && !isPaused) {
+      setAlerts(prev => prev.filter(alert => alert.type !== 'No Updates'));
+    }
+  }, [currentRate, isPaused]);
+
   return (
     <div style={{
       background: '#1a1b1e',
@@ -133,7 +140,7 @@ const App: React.FC = () => {
         flexDirection: 'column',
         gap: '20px'
       }}>
-        <h3 style={{ color: '#ffffff', margin: 0 }}>Messages per Second</h3>
+        <h3 style={{ color: '#ffffff', margin: 0 }}>Updates Per Second</h3>
 
         <div style={{
           backgroundColor: '#1a1b1e',
@@ -145,44 +152,21 @@ const App: React.FC = () => {
           transition: 'color 0.3s'
         }}>
           {isPaused ? (
-            <span style={{ color: '#dc3545' }}>No Messages</span>
+            <span style={{ color: '#dc3545' }}>No Updates</span>
           ) : (
-            `${Math.round(currentRate).toLocaleString()} msg/s`
+            `${Math.round(currentRate).toLocaleString()} updates/s`
           )}
         </div>
 
-        <div style={{ flex: '1', minHeight: '200px' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-              <XAxis
-                dataKey="name"
-                stroke="#fff"
-                tick={{ fill: '#fff' }}
-                tickFormatter={(value) => value.split(':')[2]}
-              />
-              <YAxis
-                stroke="#fff"
-                tick={{ fill: '#fff' }}
-                domain={[0, 8000]}  // Adjusted to match grid updates
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1a1b1e',
-                  border: '1px solid #333',
-                  color: '#fff'
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="rate"
-                stroke="#00a6ed"
-                dot={false}
-                name="Messages/s"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+            <XAxis dataKey="name" stroke="#fff" />
+            <YAxis stroke="#fff" />
+            <Tooltip />
+            <Line type="monotone" dataKey="rate" stroke="#00a6ed" dot={false} name="Updates/s" />
+          </LineChart>
+        </ResponsiveContainer>
 
         <div>
           <h4 style={{ color: '#ffffff', marginBottom: '10px' }}>Alerts</h4>
